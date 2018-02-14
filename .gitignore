@@ -1,0 +1,6 @@
+
+build/
+
+firmware/PlaneGPS\.bin
+
+fsdata/fsdata\.c
