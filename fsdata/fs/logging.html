@@ -1,152 +1,193 @@
 <!DOCTYPE html>
 <html>
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no">
-		<link rel="stylesheet" type="text/css" href="css/siimple.min.css">
-		<link rel="stylesheet" type="text/css" href="css/style.css">
-		<link rel="shortcut icon" href="img/favicon.png">
-		<title>HTTP Server</title>
-	</head>
-	<body>
-		<ul class="navbar">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no">
+	<link rel="stylesheet" type="text/css" href="css/siimple.min.css">
+	<link rel="stylesheet" type="text/css" href="css/style.css">
+	<link rel="shortcut icon" href="img/favicon.png">
+	<title>HTTP Server</title>
+</head>
+<body>
+	<ul class="navbar">
 			<li><a href="/">Home</a></li>
 			<li><a class="active" href="logging">Logging</a></li>
 			<li><a href="about">About</a></li>
-		</ul>
+	</ul>
 
-		<div class="grid main">
-			<h1>Logging</h1>
-			<p>Showing graphs of your flight</p>
-			<div id="status_box" class="alert alert-info">Loading..</div>
-			<div class="cover" align="center">
-				<p>Current speed</p>
-				<canvas id="currentSpeedCanvas" width="512" height="100"></canvas>
-				<p>Maximum speed</p>
-				<canvas id="maxSpeedCanvas" width="512" height="100"></canvas>
-				<p/>
-				<p>Record Control</p>
-				<div class="onoffswitch">
-					<input type="checkbox" name="onoffswitch" class="onoffswitch-checkbox" id="record-switch" onclick="switchRecord()">
-					<label class="onoffswitch-label" for="led-switch">
-						<span class="onoffswitch-inner"></span>
-						<span class="onoffswitch-switch"></span>
-					</label>
-				</div>
+	<div class="grid main">
+		<h1>Logging</h1>
+		<p>Showing graphs of your flight</p>
+		<div id="status_box" class="alert alert-info">Loading..</div>
+		<div class="cover" align="center">
+			<p>Current speed</p>
+			<div id="currentSpeed-textfield" style="font-size: 41px;" class="currentSpeed-textfield reset">0</div>
+			<canvas id="currentSpeedCanvas" width="512" height="100"></canvas>
+			<p>Maximum speed</p>
+			<canvas id="maxSpeedCanvas" width="512" height="100"></canvas>
+			<p/>
+			<p>Record Control</p>
+			<div class="onoffswitch">
+				<input type="checkbox" name="onoffswitch" class="onoffswitch-checkbox" id="recordSwitch" onclick="switchRecord()">
+				<label class="onoffswitch-label" for="recordSwitch">
+					<span class="onoffswitch-inner"></span>
+					<span class="onoffswitch-switch"></span>
+				</label>
 			</div>
-
-			<h1>Server Status</h1>
-			<table class="table table-striped">
-				<tr>
-					<td><b>Uptime:</b></td>
-					<td id="location"></td>
-				</tr>
-				<tr>
-					<td><b>Measured maximum speed:</b></td>
-					<td id="maxSpeed"></td>
-				</tr>
-				<tr>
-					<td><b>Current speed:</b></td>
-					<td id="currentSpeed"></td>
-				</tr>
-			</table>
 		</div>
 
+		<h1>Server Status</h1>
+		<table class="table table-striped">
+			<tr>
+					<td><b>Uptime:</b></td>
+				<td id="location"></td>
+			</tr>
+			<tr>
+					<td><b>Measured maximum speed:</b></td>
+				<td id="maxSpeed"></td>
+			</tr>
+			<tr>
+					<td><b>Current speed:</b></td>
+				<td id="currentSpeed"></td>
+			</tr>
+		</table>
+	</div>
+
 		<script type="text/javascript" src="js/smoothie_min.js"></script>
-		<script>
-			var ws;
-			var retries;
-			var currentSpeed;
-			var maxSpeed;
+	<script>
+		var ws;
+		var retries;
+		var currentSpeed;
+		var maxSpeed;
 			var currentSpeedSeries = new TimeSeries();
 			var maxSpeedSeries = new TimeSeries();
-			window.onload = function() {
-				wsOpen();
-				startPolling();
-			}
+		window.onload = function () {
+			wsOpen();
+			startPolling();
+		}
 
-			function setMsg(cls, text) {
-				sbox = document.getElementById('status_box');
-				sbox.className = "alert alert-" + cls;
-				sbox.innerHTML = text;
-				console.log(text);
-			}
+		function setMsg(cls, text) {
+			sbox = document.getElementById('status_box');
+			sbox.className = "alert alert-" + cls;
+			sbox.innerHTML = text;
+			console.log(text);
+		}
 
-			function startPolling() {
-				var currentSpeedChart = new SmoothieChart({millisPerPixel:11,grid:{fillStyle:'#ffffff',strokeStyle:'#ffffff',borderVisible:false},
-					labels:{fillStyle:'#000000'},maxValue:300,minValue:0});
-					currentSpeedChart.addTimeSeries(currentSpeedSeries, {lineWidth:2,strokeStyle:'#03a9f4',fillStyle:'#f1f5fa'});
-					currentSpeedChart.streamTo(document.getElementById("currentSpeedCanvas"), 500);
-
-				var maxSpeedChart = new SmoothieChart({millisPerPixel:21,grid:{fillStyle:'#ffffff',strokeStyle:'#ffffff',borderVisible:false},
-					labels:{fillStyle:'#000000'},maxValue:300,minValue:0});
-					maxSpeedChart.addTimeSeries(maxSpeedSeries, {lineWidth:2,strokeStyle:'#03a9f4',fillStyle:'#f1f5fa'});
-					maxSpeedChart.streamTo(document.getElementById("maxSpeedCanvas"), 1000);
-
-				setInterval(function() { wsWrite('A'); }, 500);
-				setInterval(function() { wsWrite('B'); }, 1000);
-			}
-
-			function onMessage(evt) {
-				retries = 0;
-				var dv = new DataView(evt.data);
-				var val = dv.getUint16(1);
-				var prefix = dv.getUint8(0);
-				if (val == 0xBEEF || val == 0xDEAD)
-					console.log("Record switched");
-				else{
-					if (prefix == "A".charCodeAt(0)) {
-						currentSpeedSeries.append(new Date().getTime(), val);	
-					} else if (prefix == "B".charCodeAt(0)) {
-						maxSpeedSeries.append(new Date().getTime(), val);
-					} else{
-						console.log("Unknown prefix!", prefix, val)
-					}
-				}			
-			}
-
-			function wsOpen() {
-				if (ws === undefined || ws.readyState != 0) {
-					if (retries)
-						setMsg("error", "WebSocket timeout, retrying..");
-					else
-						setMsg("info", "Opening WebSocket..");
-					ws = new WebSocket("ws://" + location.host);
-					ws.binaryType = 'arraybuffer';
-					ws.onopen = function(evt) { retries = 0; setMsg("done", "WebSocket is open."); };
-					ws.onerror = function(evt) { setMsg("error", "WebSocket error!"); };
-					ws.onmessage = function(evt) { onMessage(evt); };
-					wsOpenStream();
-					retries = 0;
+		function createGauge() {
+			var opts = {
+				angle: -0.07, // The span of the gauge arc
+				lineWidth: 0.44, // The line thickness
+				radiusScale: 0.92, // Relative radius
+				pointer: {
+					length: 0.46, // // Relative to gauge radius
+					strokeWidth: 0.038, // The thickness
+					color: '#000000' // Fill color
+				},
+				limitMax: false, // If false, max value increases automatically if value > maxValue
+				limitMin: false, // If true, the min value of the gauge will be fixed
+				colorStart: '#6FADCF', // Colors
+				colorStop: '#8FC0DA', // just experiment with them
+				strokeColor: '#3528E0', // to see which ones work best for you
+				generateGradient: true,
+				highDpiSupport: true, // High resolution support
+				// renderTicks is Optional
+				renderTicks: {
+					divisions: 5,
+					divWidth: 3,
+					divLength: 0.7,
+					divColor: '#333333',
+					subDivisions: 3,
+					subLength: 0.5,
+					subWidth: 1.2,
+					subColor: '#666666'
 				}
 			}
 
-			function wsOpenStream() {
-				var uri = "/stream"
-				var ws = new WebSocket("ws://" + location.host + uri);
-				ws.onmessage = function(evt) {
-					console.log(evt.data);
-					var stats = JSON.parse(evt.data);
-					console.log(stats);
-					document.getElementById('loc').innerHTML = stats.location;
-					document.getElementById('max').innerHTML = stats.maxSpeed + ' km/h';
-					document.getElementById('cur').innerHTML = stats.speed + ' km/h'
-				};
-			}
+			var target = document.getElementById('currentSpeedCanvas');
+			currentSpeedgauge = new Gauge(target).setOptions(opts); // create sexy gauge!
+			currentSpeedgauge.setTextField(document.getElementById("currentSpeed-textfield"))
+		}
 
-			function wsWrite(data) {
-				if (ws.readyState == 3 || retries++ > 5)
-					wsOpen();
-				else if (ws.readyState == 1)
-					ws.send(data);
-			}
+		function startPolling() {
 
-			function switchRecord() {
-				if (document.getElementById('record-switch').checked)
-					wsWrite('startLog');
+			setInterval(function () {
+				wsWrite('A');
+			}, 500);
+			setInterval(function () {
+				wsWrite('B');
+			}, 1000);
+		}
+
+		function onMessage(evt) {
+			retries = 0;
+			var dv = new DataView(evt.data);
+			var val = dv.getUint16(1);
+			var prefix = dv.getUint8(0);
+			if (val == 0xBEEF || val == 0xDEAD)
+				console.log("Record switched");
+			else {
+				if (prefix == "A".charCodeAt(0)) {
+					currentSpeedgauge.set(val);
+					// } else if (prefix == "B".charCodeAt(0)) {
+					// 	// maxSpeedSeries.append(new Date().getTime(), val);
+				} else {
+					console.log("Unknown prefix!", prefix, val)
+				}
+			}
+		}
+
+		function wsOpen() {
+			if (ws === undefined || ws.readyState != 0) {
+				if (retries)
+					setMsg("error", "WebSocket timeout, retrying..");
 				else
-					wsWrite('stopLog');
+					setMsg("info", "Opening WebSocket..");
+				ws = new WebSocket("ws://" + location.host);
+				ws.binaryType = 'arraybuffer';
+				ws.onopen = function (evt) {
+					retries = 0;
+					setMsg("done", "WebSocket is open.");
+				};
+				ws.onerror = function (evt) {
+					setMsg("error", "WebSocket error!");
+				};
+				ws.onmessage = function (evt) {
+					onMessage(evt);
+				};
+				wsOpenStream();
+				retries = 0;
 			}
-		</script>
-	</body>
+		}
+
+		function wsOpenStream() {
+			var uri = "/stream"
+			var ws = new WebSocket("ws://" + location.host + uri);
+			ws.onmessage = function (evt) {
+				console.log(evt.data);
+				var stats = JSON.parse(evt.data);
+				console.log(stats);
+				document.getElementById('loc').innerHTML = stats.location;
+				document.getElementById('max').innerHTML = stats.maxSpeed + ' km/h';
+				document.getElementById('cur').innerHTML = stats.speed + ' km/h'
+			};
+		}
+
+		function wsWrite(data) {
+			if (ws.readyState == 3 || retries++ > 5)
+				wsOpen();
+			else if (ws.readyState == 1)
+				ws.send(data);
+		}
+
+		function switchRecord() {
+			var switchElement = document.getElementById("recordSwitch");
+			if (switchElement.checked)
+				wsWrite('E');
+			else
+				wsWrite('D');
+		}
+	</script>
+</body>
+
 </html>
