@@ -69,11 +69,11 @@ void user_init(void)
 #endif
 
     // create a upd endpoint that will return its ip adres when called
-    // initUPD();
+    initUPD();
 
     // create the stuff needed for the gps stuff
     gyneo6_init();
 
     // create a http server
-    // xTaskCreate(&httpd_task, "HTTP Daemon", 256, NULL, 2, NULL);
+    xTaskCreate(&httpd_task, "HTTP Daemon", 256, NULL, 2, NULL);
 }
