@@ -23,6 +23,8 @@ enum
   SSI_MAX_SPEED
 };
 
+bool sendJSON = false;
+
 int32_t ssi_handler(int32_t iIndex, char *pcInsert, int32_t iInsertLen)
 {
   switch (iIndex)
@@ -96,19 +98,28 @@ void websocket_task(void *pvParameter)
       break;
     }
 
-    /* Generate response in JSON format */
-    char response[64];
-    gyneo_info *info = gyneo6_info();
-    int len = snprintf(response, sizeof(response),
-                       "{\"loc\" : {\"long\":\"%.4f\" , \"lat\":\"%.4f\","
-                       " \"max\" : \"%.2f\","
-                       " \"cur\" : \"%.2f\"}",
-                       info->longitude.degrees + info->longitude.minutes / 100.0,
-                       info->latitude.degrees + info->latitude.minutes / 100.0, // first row, loc
-                       info->maxSpeed_km, info->speed_km);
+    if (sendJSON)
+    {
+      /* Generate response in JSON format */
+      char response[85];
+      gyneo_info *info = gyneo6_info();
+      int len = snprintf(response, sizeof(response),
+                         "{\"loc\" : {\"long\":\"%.4f\" , \"lat\":\"%.4f\"},"
+                         " \"max\" : \"%.2f\","
+                         " \"cur\" : \"%.2f\"}\n",
+                         info->longitude.degrees + info->longitude.minutes / 100.0,
+                         info->latitude.degrees + info->latitude.minutes / 100.0, // first row, loc
+                         info->maxSpeed_km, info->speed_km);
 
-    if (len < sizeof(response))
-      websocket_write(pcb, (unsigned char *)response, len, WS_TEXT_MODE);
+      if (len < sizeof(response))
+      {
+        websocket_write(pcb, (unsigned char *)response, len, WS_TEXT_MODE);
+      }
+      else
+      {
+        printf("Len of output is too big namely: %i", len);
+      }
+    }
 
     vTaskDelay(2000 / portTICK_PERIOD_MS);
   }
@@ -139,9 +150,11 @@ void websocket_cb(struct tcp_pcb *pcb, uint8_t *data, u16_t data_len, uint8_t mo
     break;
   case 'D': // Disable Record
     val = 0xDEAD;
+    sendJSON = false;
     break;
   case 'E': // Enable Record
     val = 0xBEEF;
+    sendJSON = true;
     break;
   default:
     printf("Unknown command\n");
@@ -166,7 +179,7 @@ void websocket_open_cb(struct tcp_pcb *pcb, const char *uri)
   if (!strcmp(uri, "/stream"))
   {
     printf("request for streaming\n");
-    xTaskCreate(&websocket_task, "websocket_task", 256, (void *)pcb, 2, NULL);
+    xTaskCreate(&websocket_task, "websocket_task", 512, (void *)pcb, 2, NULL);
   }
 }
 
@@ -175,8 +188,7 @@ void httpd_task(void *pvParameters)
   tCGI pCGIs[] = {
       {"/index", (tCGIHandler)gpio_index_handler},
       {"/about", (tCGIHandler)about_cgi_handler},
-      {"/logging", (tCGIHandler)logging_cgi_handler}
-  };
+      {"/logging", (tCGIHandler)logging_cgi_handler}};
 
   const char *pcConfigSSITags[] = {
       "gpsFix",   // GPS fix time
