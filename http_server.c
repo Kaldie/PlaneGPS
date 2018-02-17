@@ -107,8 +107,8 @@ void websocket_task(void *pvParameter)
                          "{\"loc\" : {\"long\":\"%.4f\" , \"lat\":\"%.4f\"},"
                          " \"max\" : \"%.2f\","
                          " \"cur\" : \"%.2f\"}\n",
-                         info->longitude.degrees + info->longitude.minutes / 100.0,
-                         info->latitude.degrees + info->latitude.minutes / 100.0, // first row, loc
+                         info->longitude.degrees + info->longitude.minutes / 60.0,
+                         info->latitude.degrees + info->latitude.minutes / 60.0, // first row, loc
                          info->maxSpeed_km, info->speed_km);
 
       if (len < sizeof(response))

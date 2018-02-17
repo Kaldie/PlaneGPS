@@ -29,8 +29,6 @@
 void user_init(void)
 {
     printf("SDK version:%s\n", sdk_system_get_sdk_version());
-
-    uart_set_baud(0, 115200);
     sdk_os_delay_us(500); // Wait UART
 
 #ifdef STATIONMODE
